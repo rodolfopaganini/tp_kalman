@@ -1,25 +1,27 @@
 # TP Kalman filter
 # Author: Rodolfo Paganini
 
+import math
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 
 
 def main():
-    # Load position data
+    # Load position and velocity data
     original_position = np.loadtxt('posicion.dat')
+    original_velocity = np.loadtxt('velocidad.dat')
 
-    # Convert the data into separate arrays per coordinate
+    # Convert position data into separate arrays per coordinate
     t = original_position[np.arange(len(original_position)), [0]]
     x = original_position[np.arange(len(original_position)), [1]]
     y = original_position[np.arange(len(original_position)), [2]]
     z = original_position[np.arange(len(original_position)), [3]]
 
-    # Define 'measurement data', which is the real one plus noise
-    x_measurements = x + np.random.normal(scale=10, size=t.size)
-    y_measurements = y + np.random.normal(scale=10, size=t.size)
-    z_measurements = z + np.random.normal(scale=10, size=t.size)
+    # Convert velocity data into separate arrays per coordinate
+    vx = original_velocity[np.arange(len(original_position)), [1]]
+    vy = original_velocity[np.arange(len(original_position)), [2]]
+    vz = original_velocity[np.arange(len(original_position)), [3]]
 
     # Define state and output matrices
     state_matrix = np.array(
@@ -36,57 +38,109 @@ def main():
         ],
     )
     input_matrix = np.identity(9)
-    output_matrix = np.array([
-        [1, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 1, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 1, 0, 0, 0, 0, 0, 0],
-    ])
     process_noise_cov = 0.3 * np.identity(9)
-    observation_noise_cov = 100 * np.identity(3)
     input_values = np.zeros(9)
 
-    # Set the initial state
-    estimated_state = np.array([10.7533, 36.6777, -45.1769, 1.1009, -17.0, 35.7418, -5.7247, 3.4268, 5.2774])
-    error_cov = np.identity(9)
-    np.fill_diagonal(error_cov, [100, 100, 100, 1, 1, 1, 0.01, 0.01, 0.01])
+    uniform_limits = 10 * math.sqrt(3)
+    for description, measured_variables_names, measurements, output_matrix, observation_noise_cov in [
+        [
+            'with gaussian noise',
+            ['x', 'y', 'z'],
+            (
+                x + np.random.normal(scale=10, size=t.size),
+                y + np.random.normal(scale=10, size=t.size),
+                z + np.random.normal(scale=10, size=t.size),
+            ),
+            np.array([
+                [1, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 1, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 1, 0, 0, 0, 0, 0, 0],
+            ]),
+            100 * np.identity(3),
+        ],
+        [
+            'with uniform noise',
+            ['x', 'y', 'z'],
+            (
+                x + np.random.uniform(high=uniform_limits, low=-uniform_limits, size=t.size),
+                y + np.random.uniform(high=uniform_limits, low=-uniform_limits, size=t.size),
+                z + np.random.uniform(high=uniform_limits, low=-uniform_limits, size=t.size),
+            ),
+            np.array([
+                [1, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 1, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 1, 0, 0, 0, 0, 0, 0],
+            ]),
+            100 * np.identity(3),
+        ],
+        [
+            'with gaussian noise and speed measurement',
+            ['x', 'y', 'z', 'vx', 'vy', 'vz'],
+            (
+                x + np.random.normal(scale=10, size=t.size),
+                y + np.random.normal(scale=10, size=t.size),
+                z + np.random.normal(scale=10, size=t.size),
+                vx + np.random.normal(scale=0.2, size=t.size),
+                vy + np.random.normal(scale=0.2, size=t.size),
+                vz + np.random.normal(scale=0.2, size=t.size),
+            ),
+            np.array([
+                [1, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 1, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 1, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 1, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 1, 0, 0, 0],
+            ]),
+            np.array([
+                [100, 0, 0, 0, 0, 0],
+                [0, 100, 0, 0, 0, 0],
+                [0, 0, 100, 0, 0, 0],
+                [0, 0, 0, 0.04, 0, 0],
+                [0, 0, 0, 0, 0.04, 0],
+                [0, 0, 0, 0, 0, 0.04],
+            ]),
+        ],
+    ]:
+        # Set the initial state
+        estimated_state = np.array([10.7533, 36.6777, -45.1769, 1.1009, -17.0, 35.7418, -5.7247, 3.4268, 5.2774])
+        error_cov = np.identity(9)
+        np.fill_diagonal(error_cov, [100, 100, 100, 1, 1, 1, 0.01, 0.01, 0.01])
 
-    # Predict values using a kalman filter
-    x_predicted = []
-    y_predicted = []
-    z_predicted = []
-    for x_measurement, y_measurement, z_measurement in zip(x_measurements, y_measurements, z_measurements):
-        measured_output = np.array([x_measurement, y_measurement, z_measurement])
-        estimated_state, error_cov = kalman(
-            state_matrix=state_matrix,
-            input_matrix=input_matrix,
-            output_matrix=output_matrix,
-            measured_output=measured_output,
-            input_values=input_values,
-            prev_estimated_state=estimated_state,
-            prev_error_cov=error_cov,
-            process_noise_cov=process_noise_cov,
-            observation_noise_cov=observation_noise_cov,
-        )
-        x_predicted.append(estimated_state[0])
-        y_predicted.append(estimated_state[1])
-        z_predicted.append(estimated_state[2])
+        # Predict values using a kalman filter
+        predicted = [list() for i in range(len(measured_variables_names))]
+        for measurement in zip(*measurements):
+            measured_output = np.array(measurement)
+            estimated_state, error_cov = kalman(
+                state_matrix=state_matrix,
+                input_matrix=input_matrix,
+                output_matrix=output_matrix,
+                measured_output=measured_output,
+                input_values=input_values,
+                prev_estimated_state=estimated_state,
+                prev_error_cov=error_cov,
+                process_noise_cov=process_noise_cov,
+                observation_noise_cov=observation_noise_cov,
+            )
+            for variable in range(len(measured_variables_names)):
+                predicted[variable].append(estimated_state[variable])
 
-    # Plot the original values, the noisy ones and the predicted ones
-    for variable_name in ['x', 'y', 'z']:
-        # Set the figure up
-        fig, ax = plt.subplots()
-        ax.plot(t, eval(variable_name), label='original')
-        ax.plot(t, eval(variable_name + '_measurements'), label='measurements')
-        ax.plot(t, eval(variable_name + '_predicted'), label='predicted')
-        ax.set(
-            xlabel='time (s)',
-            ylabel='{} (m)'.format(variable_name),
-            title='Position in {} axis'.format(variable_name),
-        )
-        ax.grid()
-        plt.legend()
-        fig.savefig("{}.png".format(variable_name))
-        plt.show()
+        # Plot the original values, the noisy ones and the predicted ones
+        for i, variable_name in enumerate(measured_variables_names):
+            # Set the figure up
+            fig, ax = plt.subplots()
+            ax.plot(t, eval(variable_name), label='original')
+            ax.plot(t, measurements[i], label='measurements')
+            ax.plot(t, predicted[i], label='predicted')
+            ax.set(
+                xlabel='time (s)',
+                ylabel='{} (m)'.format(variable_name),
+                title='{} in {} axis'.format('Position' if i < 3 else 'Velocity', variable_name[-1]),
+            )
+            ax.grid()
+            plt.legend()
+            fig.savefig("{}_{}.svg".format(description, variable_name))
+            # plt.show()
 
 
 def kalman(
@@ -138,7 +192,10 @@ def kalman(
         kalman_gain,
         measured_output - np.matmul(output_matrix, estimated_state_priori),
     )
-    error_cov_posteriori = np.matmul(np.identity(9) - np.matmul(kalman_gain, output_matrix), error_cov_priori)  # TODO make this dependent on the state matrix dims
+    error_cov_posteriori = np.matmul(
+        np.identity(len(state_matrix)) - np.matmul(kalman_gain, output_matrix),
+        error_cov_priori,
+    )
     return estimated_state_posteriori, error_cov_posteriori
 
 
