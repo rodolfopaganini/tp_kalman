@@ -125,9 +125,9 @@ def main():
             for variable in range(len(measured_variables_names)):
                 predicted[variable].append(estimated_state[variable])
 
-        # Plot the original values, the noisy ones and the predicted ones
+        # Generate the figures
         for i, variable_name in enumerate(measured_variables_names):
-            # Set the figure up
+            # Plot the original values, the noisy ones and the predicted ones
             fig, ax = plt.subplots()
             ax.plot(t, eval(variable_name), label='original')
             ax.plot(t, measurements[i], label='measurements')
@@ -141,6 +141,26 @@ def main():
             plt.legend()
             fig.savefig("{}_{}.svg".format(description, variable_name))
             # plt.show()
+
+            # Plot the errors in the 3 coordinates
+            fig, ax = plt.subplots()
+            error = eval(variable_name) - predicted[i]
+            ax.plot(t, error, label=variable_name)
+            ax.set(
+                xlabel='time (s)',
+                ylabel='Error (m)',
+                title='Error in {} axis'.format(variable_name[-1]),
+            )
+            ax.grid()
+            plt.legend()
+            fig.savefig("error_{}_{}.svg".format(description, variable_name))
+            # plt.show()
+            print('Error {} {}: Mean: {}, RMS: {}'.format(
+                description,
+                variable_name,
+                np.mean(error),
+                np.sqrt(sum(error ** 2) / len(error)),
+            ))
 
 
 def kalman(
